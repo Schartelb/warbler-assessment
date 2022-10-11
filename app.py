@@ -5,7 +5,7 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -33,6 +33,7 @@ connect_db(app)
 def add_user_to_g():
     """If we're logged in, add curr user to Flask global."""
 
+    # if the session has a CURR USER KEY, do a get query for user info
     if CURR_USER_KEY in session:
         g.user = User.query.get(session[CURR_USER_KEY])
 
@@ -52,6 +53,9 @@ def do_logout():
     if CURR_USER_KEY in session:
         del session[CURR_USER_KEY]
 
+
+# g.user equals the response to User.query.get(session[CURR_USER_KEY]) before any route requests
+# on do_login session[CURR_USER_KEY]==user.id => g.user.id should be callable.
 
 @app.route('/signup', methods=["GET", "POST"])
 def signup():
@@ -141,7 +145,6 @@ def list_users():
 @app.route('/users/<int:user_id>')
 def users_show(user_id):
     """Show user profile."""
-
     user = User.query.get_or_404(user_id)
 
     # snagging messages in order from the database;
@@ -208,12 +211,41 @@ def stop_following(follow_id):
 
     return redirect(f"/users/{g.user.id}/following")
 
+# add Like feature
+
+
+@app.route('/users/add_like/<int:message_id>', methods=['POST'])
+def add_like(message_id):
+    like = Likes.query.filter_by(user_id=g.user.id, message_id=message_id)
+    if bool(like):
+        db.session.delete(like)
+        db.session.commit()
+        return redirect('/')
+    else:
+        like = Likes(user_id=g.user.id, message_id=message_id)
+        db.session.add(like)
+        db.session.commit()
+        return redirect('/')
+
 
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
-
-    # IMPLEMENT THIS
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    user = User.query.get_or_404(g.user.id)
+    form = UserAddForm(obj=user)
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.email = form.email.data
+        user.image_url = form.image_url.data
+        user.header_image_url = form.header_image_url.data
+        user.bio = form.bio.data
+        db.session.commit()
+        flash(f"User {user.username} updated!")
+        return redirect(f'/users/{g.user.id}')
+    return render_template("/users/edit.html", form=form)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -294,8 +326,11 @@ def homepage():
     """
 
     if g.user:
+        follows = [f.id for f in g.user.following]
+        follows.append(g.user.id)
         messages = (Message
                     .query
+                    .filter(Message.user_id.in_(follows))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
