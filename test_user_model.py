@@ -5,13 +5,16 @@
 #    python -m unittest test_user_model.py
 
 
+from models import db, User, Message, Follows
 from sqlite3 import IntegrityError
 from app import app
 import os
 from unittest import TestCase
-from psycopg2.errors import UniqueViolation
+from psycopg2.errorcodes import UNIQUE_VIOLATION
+from psycopg2 import errors
+from flask_bcrypt import Bcrypt
+bcrypt = Bcrypt()
 
-from models import db, User, Message, Follows
 
 # BEFORE we import our app, let's set an environmental variable
 # to use a different database for tests (we need to do this
@@ -106,7 +109,31 @@ class UserModelTestCase(TestCase):
         self.assertEqual(u1.username, "NewUser")
 
         # Does User.signup fail with repeated values
-        u2 = User.signup(username="NewUser",
-                         email="TestUser2@test.com", password="HASH_PASS", image_url="jpeg.jpg")
-        db.session.add(u2)
-        self.assertRaises(UniqueViolation, db.session.commit())
+        try:
+            u2 = User.signup(username="NewUser",
+                             email="TestUser2@test.com", password="HASH_PASS", image_url="jpeg.jpg")
+            db.session.add(u2)
+            db.session.commit()
+        except errors.lookup(UNIQUE_VIOLATION) as u_v:
+            errorcode = u_v.pgcode
+            self.assertEqual(errorcode, 23505)
+
+    def test_User_login(self):
+        """Does User.authenticate work//fail as expected"""
+        # Does User.authenticate work with correct username/password
+        hashed_pwd = bcrypt.generate_password_hash(
+            "HASHED_PASSWORD").decode('UTF-8')
+        u = User(
+            email="test@test.com",
+            username="testuser",
+            password=hashed_pwd
+        )
+        db.session.add(u)
+        db.session.commit()
+
+        # Check login with correct username/password
+        self.assertTrue(User.authenticate(u.username, "HASHED_PASSWORD"))
+        # Check login fail on wrong password
+        self.assertFalse(User.authenticate(u.username, "password"))
+        # Check Login fail on wrong username
+        self.assertFalse(User.authenticate("username", u.password))
