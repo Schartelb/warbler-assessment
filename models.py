@@ -1,6 +1,7 @@
 """SQLAlchemy models for Warbler."""
 
 from datetime import datetime
+from enum import unique
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 
@@ -31,18 +32,21 @@ class Likes(db.Model):
     """Mapping user likes to warbles."""
 
     __tablename__ = 'likes'
-# removed id as primary key and as column.  Many users will like same message so having double primary keys will allow for single tuple
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
 
     user_id = db.Column(
         db.Integer,
-        db.ForeignKey('users.id', ondelete='cascade'),
-        primary_key=True
+        db.ForeignKey('users.id', ondelete='cascade')
     )
-# having message_id being unique allows a single user to like a message, first come first serve
+
     message_id = db.Column(
         db.Integer,
         db.ForeignKey('messages.id', ondelete='cascade'),
-        primary_key=True
+        unique=True
     )
 
 

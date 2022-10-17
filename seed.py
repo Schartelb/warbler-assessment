@@ -17,9 +17,9 @@ with open('generator/messages.csv') as messages:
 with open('generator/follows.csv') as follows:
     db.session.bulk_insert_mappings(Follows, DictReader(follows))
 
-#generates sampling of likes based on expected number of users and messages
-user_id = random.sample(range(300), 75)
-message_id = random.sample(range(1000), 75)
+# generates sampling of likes based on expected number of users and messages
+user_id = random.sample(range(1, 300), 75)
+message_id = random.sample(range(1, 1000), 75)
 like_list = [Likes(user_id=u, message_id=m)
              for u, m in zip(user_id, message_id)]
 db.session.add_all(like_list)

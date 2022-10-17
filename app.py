@@ -216,14 +216,15 @@ def stop_following(follow_id):
 
 @app.route('/users/add_like/<int:message_id>', methods=['POST'])
 def add_like(message_id):
-    like = Likes.query.filter_by(user_id=g.user.id, message_id=message_id)
-    if bool(like):
+    like = Likes.query.filter_by(
+        user_id=g.user.id, message_id=message_id).first()
+    if like:
         db.session.delete(like)
         db.session.commit()
         return redirect('/')
     else:
-        like = Likes(user_id=g.user.id, message_id=message_id)
-        db.session.add(like)
+        message = Message.query.get_or_404(message_id)
+        g.user.likes.append(message)
         db.session.commit()
         return redirect('/')
 
